@@ -1,0 +1,101 @@
+services:
+
+  # ── PRIMARY (leader) ─────────────────────────────────────────────────────────
+  primary:
+    image: postgres:15
+    container_name: pg_primary
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: demo
+    volumes:
+      - primary_data:/var/lib/postgresql/data
+      - ./primary/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
+    # Pass replication settings directly as -c flags so they take effect from
+    # the very first startup (no restart needed).
+    command:
+      - postgres
+      - -c
+      - wal_level=replica            # enables WAL streaming to standbys
+      - -c
+      - max_wal_senders=10           # max concurrent replication connections
+      - -c
+      - max_replication_slots=10
+      - -c
+      - wal_keep_size=256            # retain 256 MB of WAL for catching-up replicas
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf     # use our mounted hba file
+      # synchronous_standby_names is NOT set here because the postgres entrypoint
+      # runs our full command for the temporary init server too.  If the flag were
+      # present, CREATE DATABASE would block waiting for replica_sync, which hasn't
+      # connected yet → deadlock.  We set it via ALTER SYSTEM in init.sql instead;
+      # it lands in postgresql.auto.conf and is active when the real server starts.
+    ports:
+      - "5432:5432"
+    networks:
+      - pg_net
+    healthcheck:
+      test: ["CMD-SHELL", "psql -U postgres -d demo -c 'SELECT 1' -q --no-align --tuples-only"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ── SYNCHRONOUS REPLICA (follower 1) ─────────────────────────────────────────
+  # The primary WAITS for this replica to confirm each WAL write before
+  # returning success to the client.  Durability ↑, latency ↑.
+  replica_sync:
+    image: postgres:15
+    container_name: pg_replica_sync
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PRIMARY_HOST: primary
+      PRIMARY_PORT: "5432"
+      REPL_USER: replicator
+      REPL_PASS: replicator_pass
+      REPLICA_NAME: replica_sync     # must match synchronous_standby_names on primary
+    volumes:
+      - replica_sync_data:/var/lib/postgresql/data
+      - ./replica/setup.sh:/setup.sh
+    command: ["bash", "/setup.sh"]
+    ports:
+      - "5433:5432"
+    networks:
+      - pg_net
+    depends_on:
+      primary:
+        condition: service_healthy
+
+  # ── ASYNCHRONOUS REPLICA (follower 2) ────────────────────────────────────────
+  # The primary does NOT wait for this replica.  Writes return immediately;
+  # the replica catches up in the background.  Latency ↓, durability ↓.
+  replica_async:
+    image: postgres:15
+    container_name: pg_replica_async
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PRIMARY_HOST: primary
+      PRIMARY_PORT: "5432"
+      REPL_USER: replicator
+      REPL_PASS: replicator_pass
+      REPLICA_NAME: replica_async
+    volumes:
+      - replica_async_data:/var/lib/postgresql/data
+      - ./replica/setup.sh:/setup.sh
+    command: ["bash", "/setup.sh"]
+    ports:
+      - "5434:5432"
+    networks:
+      - pg_net
+    depends_on:
+      primary:
+        condition: service_healthy
+
+networks:
+  pg_net:
+    driver: bridge
+
+volumes:
+  primary_data:
+  replica_sync_data:
+  replica_async_data:
