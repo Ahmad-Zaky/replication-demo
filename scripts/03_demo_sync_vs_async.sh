@@ -27,14 +27,17 @@ echo ""
 pause pg_replica_sync
 
 echo ""
-echo "Attempting INSERT with a 4-second statement timeout..."
-echo "(this will time out because the sync replica cannot respond)"
+echo "Attempting INSERT with a 4-second client-side timeout..."
+echo "(this will time out because the sync replica cannot acknowledge the commit)"
 echo ""
 
-docker exec pg_primary psql -U postgres -d demo \
-  -c "SET statement_timeout = '4000ms';
-      INSERT INTO events (label) VALUES ('BLOCKED by missing sync ack') RETURNING id;" \
-  2>&1 || echo ""
+# NOTE: we bound this from the CLIENT side with `timeout`, NOT psql's
+# statement_timeout. A backend waiting at COMMIT for a synchronous-replication
+# ack is deliberately NOT interruptible by statement_timeout, so that setting
+# would never fire and the command would hang forever.
+timeout 4 docker exec pg_primary psql -U postgres -d demo \
+  -c "INSERT INTO events (label) VALUES ('BLOCKED by missing sync ack') RETURNING id;" \
+  2>&1 || echo "  (client gave up after 4s — the commit is still stalled server-side)"
 
 echo ""
 echo "→ Write timed out exactly as expected."
@@ -45,6 +48,8 @@ hr
 
 unpause pg_replica_sync
 echo "  Sync replica is back — let's verify it's still healthy."
+echo "  NOTE: the 'BLOCKED' commit had already happened locally; it was only"
+echo "  waiting for the ack. Now that the replica responds, that row lands too."
 sleep 3
 
 docker exec pg_primary psql -U postgres -d demo -c \

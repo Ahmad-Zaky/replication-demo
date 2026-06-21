@@ -44,7 +44,16 @@ docker exec pg_replica_sync psql -U postgres -d demo -c \
   "SELECT pg_is_in_recovery() AS still_standby, NOW() AS promoted_at;"
 
 echo ""
-echo "Step 4 — Write to the new primary (should succeed now):"
+echo "Step 4 — Clear the synchronous-standby requirement on the new primary."
+echo "  The promoted node inherited synchronous_standby_names='replica_sync'."
+echo "  As a standby that was dormant, but now that it accepts writes every"
+echo "  COMMIT would block waiting for a sync standby that no longer exists,"
+echo "  so we clear it (a real failover would reconfigure replication here)."
+docker exec pg_replica_sync psql -U postgres -d demo -c \
+  "ALTER SYSTEM SET synchronous_standby_names = ''; SELECT pg_reload_conf();"
+
+echo ""
+echo "Step 5 — Write to the new primary (should succeed now):"
 docker exec pg_replica_sync psql -U postgres -d demo -c \
   "INSERT INTO events (label) VALUES ('Written to promoted primary') RETURNING id, label, written_at;"
 

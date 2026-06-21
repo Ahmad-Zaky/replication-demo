@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash scripts/09_follower_restart_recovery.sh 1500)",
+      "Bash(bash scripts/10_new_follower_from_backup.sh 1000 1000)",
+      "Bash(grep -nE \"^#{2,4} \" README.md)",
+      "Bash(bash scripts/09_demo_choose_new_leader.sh 12s 1500)",
+      "Bash(grep -E \"replica|is_standby|sync_state|t$|f$\")",
+      "Bash(echo \"RC=$?\")",
+      "Bash(bash scripts/02_write_and_read.sh \"test write 02\")",
+      "Bash(bash scripts/03_demo_sync_vs_async.sh)",
+      "Bash(bash scripts/04_new_follower_from_backup.sh 1000 1000)",
+      "Bash(bash scripts/05_demo_catchup_recovery.sh 2000)",
+      "Bash(bash scripts/06_follower_restart_recovery.sh 2000)",
+      "Bash(bash scripts/07_demo_wal_retention.sh)",
+      "Bash(bash scripts/08_demo_failover.sh)",
+      "Bash(bash scripts/10_demo_async_failover_data_loss.sh 5)"
+    ]
+  }
+}

@@ -20,6 +20,20 @@ echo "╔═══════════════════════�
 echo "║  Replica setup: $REPLICA_NAME"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
+# ── Idempotency check ─────────────────────────────────────────────────────────
+# If this data directory has already been cloned (PG_VERSION present), this is a
+# RESTART, not a first boot. We must NOT re-clone: the whole point of follower
+# crash-recovery (DDIA "Follower failure: Catch-up recovery") is that the standby
+# starts from the log it already has on disk and then streams the gap from the
+# leader. Re-cloning would throw that log away. So we skip straight to startup.
+if [ -s "$PGDATA/PG_VERSION" ]; then
+  echo "[restart] Existing standby data found — skipping clone."
+  echo "          PostgreSQL will recover from its on-disk log and then catch up"
+  echo "          on any changes it missed while it was down."
+  echo ""
+  exec gosu postgres postgres -D "$PGDATA"
+fi
+
 echo "[1/4] Waiting for primary at $PRIMARY_HOST:$PRIMARY_PORT ..."
 until pg_isready -h "$PRIMARY_HOST" -p "$PRIMARY_PORT" -U postgres -q; do
   printf "  ."; sleep 2

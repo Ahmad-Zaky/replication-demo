@@ -12,6 +12,9 @@ services:
       - primary_data:/var/lib/postgresql/data
       - ./primary/init.sql:/docker-entrypoint-initdb.d/01_init.sql
       - ./primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      # Shared with the on-demand replica_new node: script 04 writes a base
+      # backup here, and replica_new restores from it. Empty until used.
+      - backup_data:/backup
     # Pass replication settings directly as -c flags so they take effect from
     # the very first startup (no restart needed).
     command:
@@ -91,6 +94,35 @@ services:
       primary:
         condition: service_healthy
 
+  # ── NEW FOLLOWER, bootstrapped FROM A BACKUP (follower 3) ────────────────────
+  # Demonstrates DDIA "Setting Up New Followers": a brand-new, empty node is
+  # seeded from a base backup (a snapshot of the leader) and THEN streams every
+  # change that happened since the snapshot was taken.
+  #
+  # Profile-gated, so a normal `docker compose up -d` does NOT start it. Bring it
+  # up with scripts/04_new_follower_from_backup.sh (which first writes the backup).
+  replica_new:
+    image: postgres:15
+    container_name: pg_replica_new
+    profiles: ["newfollower"]
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PRIMARY_HOST: primary
+      PRIMARY_PORT: "5432"
+      REPL_USER: replicator
+      REPL_PASS: replicator_pass
+      REPLICA_NAME: replica_new
+      BACKUP_DIR: /backup
+    volumes:
+      - replica_new_data:/var/lib/postgresql/data
+      - backup_data:/backup
+      - ./replica/restore_from_backup.sh:/restore.sh
+    command: ["bash", "/restore.sh"]
+    ports:
+      - "5435:5432"
+    networks:
+      - pg_net
+
 networks:
   pg_net:
     driver: bridge
@@ -99,3 +131,5 @@ volumes:
   primary_data:
   replica_sync_data:
   replica_async_data:
+  replica_new_data:
+  backup_data:
