@@ -1,0 +1,206 @@
+# Five independent partitions for script 13 (concurrent answers + version vectors).
+#
+# One partition per chat participant. Each partition is its own replication
+# cluster, the same shape as the main cluster in ../docker-compose.yml:
+#
+#   part_<name>_leader   accepts that writer's INSERTs
+#   part_<name>_sync     synchronous replica (durability; not read by the demo)
+#   part_<name>_async    asynchronous replica — the READ replica apps use
+#
+# The five clusters share nothing: no common leader, no common WAL. Only the
+# version vectors tie their messages together.
+#
+#   partition   leader  sync   async (read)
+#   poons       5441    5442   5443
+#   alice       5451    5452   5453
+#   bob         5461    5462   5463    ← script 13 makes this one lag
+#   carol       5471    5472   5473
+#   dave        5481    5482   5483
+#
+# Separate Compose project, so it runs next to (or instead of) the main cluster:
+#   docker compose -f partitions/docker-compose.yml up -d
+#   bash partitions/check_partitions.sh
+#   docker compose -f partitions/docker-compose.yml down -v      # full reset
+
+name: replication_partitions
+
+x-leader: &leader
+  image: postgres:15
+  environment:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_DB: demo
+  # Same flags as the main primary. synchronous_standby_names is set in init.sql.
+  command:
+    - postgres
+    - -c
+    - wal_level=replica
+    - -c
+    - max_wal_senders=10
+    - -c
+    - max_replication_slots=10
+    - -c
+    - wal_keep_size=256
+    - -c
+    - hba_file=/etc/postgresql/pg_hba.conf
+  networks: [partitions_net]
+  healthcheck:
+    test: ["CMD-SHELL", "psql -U postgres -d demo -c 'SELECT 1' -q --no-align --tuples-only"]
+    interval: 5s
+    timeout: 5s
+    retries: 20
+
+x-replica-env: &replica_env
+  PGDATA: /var/lib/postgresql/data
+  PRIMARY_PORT: "5432"
+  REPL_USER: replicator
+  REPL_PASS: replicator_pass
+
+# Each replica bootstraps with the same script as the main cluster's replicas.
+x-replica: &replica
+  image: postgres:15
+  command: ["bash", "/setup.sh"]
+  networks: [partitions_net]
+
+services:
+
+  # ── partition: poons ─────────────────────────────────────────────────────────
+  poons_leader:
+    <<: *leader
+    container_name: part_poons_leader
+    ports: ["5441:5432"]
+    volumes:
+      - poons_leader_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ../primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
+  poons_sync:
+    <<: *replica
+    container_name: part_poons_sync
+    environment: { <<: *replica_env, PRIMARY_HOST: poons_leader, REPLICA_NAME: replica_sync }
+    ports: ["5442:5432"]
+    volumes: [poons_sync_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { poons_leader: { condition: service_healthy } }
+  poons_async:
+    <<: *replica
+    container_name: part_poons_async
+    environment: { <<: *replica_env, PRIMARY_HOST: poons_leader, REPLICA_NAME: replica_async }
+    ports: ["5443:5432"]
+    volumes: [poons_async_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { poons_leader: { condition: service_healthy } }
+
+  # ── partition: alice ─────────────────────────────────────────────────────────
+  alice_leader:
+    <<: *leader
+    container_name: part_alice_leader
+    ports: ["5451:5432"]
+    volumes:
+      - alice_leader_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ../primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
+  alice_sync:
+    <<: *replica
+    container_name: part_alice_sync
+    environment: { <<: *replica_env, PRIMARY_HOST: alice_leader, REPLICA_NAME: replica_sync }
+    ports: ["5452:5432"]
+    volumes: [alice_sync_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { alice_leader: { condition: service_healthy } }
+  alice_async:
+    <<: *replica
+    container_name: part_alice_async
+    environment: { <<: *replica_env, PRIMARY_HOST: alice_leader, REPLICA_NAME: replica_async }
+    ports: ["5453:5432"]
+    volumes: [alice_async_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { alice_leader: { condition: service_healthy } }
+
+  # ── partition: bob ───────────────────────────────────────────────────────────
+  bob_leader:
+    <<: *leader
+    container_name: part_bob_leader
+    ports: ["5461:5432"]
+    volumes:
+      - bob_leader_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ../primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
+  bob_sync:
+    <<: *replica
+    container_name: part_bob_sync
+    environment: { <<: *replica_env, PRIMARY_HOST: bob_leader, REPLICA_NAME: replica_sync }
+    ports: ["5462:5432"]
+    volumes: [bob_sync_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { bob_leader: { condition: service_healthy } }
+  bob_async:
+    <<: *replica
+    container_name: part_bob_async
+    environment: { <<: *replica_env, PRIMARY_HOST: bob_leader, REPLICA_NAME: replica_async }
+    ports: ["5463:5432"]
+    volumes: [bob_async_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { bob_leader: { condition: service_healthy } }
+
+  # ── partition: carol ─────────────────────────────────────────────────────────
+  carol_leader:
+    <<: *leader
+    container_name: part_carol_leader
+    ports: ["5471:5432"]
+    volumes:
+      - carol_leader_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ../primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
+  carol_sync:
+    <<: *replica
+    container_name: part_carol_sync
+    environment: { <<: *replica_env, PRIMARY_HOST: carol_leader, REPLICA_NAME: replica_sync }
+    ports: ["5472:5432"]
+    volumes: [carol_sync_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { carol_leader: { condition: service_healthy } }
+  carol_async:
+    <<: *replica
+    container_name: part_carol_async
+    environment: { <<: *replica_env, PRIMARY_HOST: carol_leader, REPLICA_NAME: replica_async }
+    ports: ["5473:5432"]
+    volumes: [carol_async_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { carol_leader: { condition: service_healthy } }
+
+  # ── partition: dave ──────────────────────────────────────────────────────────
+  dave_leader:
+    <<: *leader
+    container_name: part_dave_leader
+    ports: ["5481:5432"]
+    volumes:
+      - dave_leader_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ../primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
+  dave_sync:
+    <<: *replica
+    container_name: part_dave_sync
+    environment: { <<: *replica_env, PRIMARY_HOST: dave_leader, REPLICA_NAME: replica_sync }
+    ports: ["5482:5432"]
+    volumes: [dave_sync_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { dave_leader: { condition: service_healthy } }
+  dave_async:
+    <<: *replica
+    container_name: part_dave_async
+    environment: { <<: *replica_env, PRIMARY_HOST: dave_leader, REPLICA_NAME: replica_async }
+    ports: ["5483:5432"]
+    volumes: [dave_async_data:/var/lib/postgresql/data, ../replica/setup.sh:/setup.sh]
+    depends_on: { dave_leader: { condition: service_healthy } }
+
+networks:
+  partitions_net:
+    driver: bridge
+
+volumes:
+  poons_leader_data:
+  poons_sync_data:
+  poons_async_data:
+  alice_leader_data:
+  alice_sync_data:
+  alice_async_data:
+  bob_leader_data:
+  bob_sync_data:
+  bob_async_data:
+  carol_leader_data:
+  carol_sync_data:
+  carol_async_data:
+  dave_leader_data:
+  dave_sync_data:
+  dave_async_data:

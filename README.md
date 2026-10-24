@@ -21,7 +21,7 @@ Spins up three PostgreSQL 15 containers with Docker Compose:
   success to the client.          background.
 ```
 
-The ten demo scripts are numbered to follow the **flow of the book's Replication
+The thirteen demo scripts are numbered to follow the **flow of the book's Replication
 chapter**, from basic leader/follower mechanics through to the failure modes:
 
 | # | Book section | Script demonstrates |
@@ -36,6 +36,9 @@ chapter**, from basic leader/follower mechanics through to the failure modes:
 | 08 | Handling Node Outages → Leader failure | Manual failover: promote a follower to new leader |
 | 09 | Handling Node Outages → Leader failure | Pick the most up-to-date follower (highest replay LSN) before promoting |
 | 10 | Handling Node Outages → Leader failure | Async failover discards "committed" writes (promoting a stale follower) |
+| 11 | Problems with Replication Lag → Consistent Prefix Reads | Partitions with different lag show the answer before the question |
+| 12 | Problems with Replication Lag → Consistent Prefix Reads | Same-partition writes, or explicit causal (LSN) tracking, keep reads a consistent prefix |
+| 13 | Consistent Prefix Reads + Detecting Concurrent Writes | Four concurrent answers ordered and delivered causally with version vectors |
 
 ---
 
@@ -45,6 +48,7 @@ chapter**, from basic leader/follower mechanics through to the failure modes:
 |---|---|
 | Docker | 24.x |
 | Docker Compose | v2 (bundled with Docker Desktop or `docker compose` plugin) |
+| Python | 3.8+ (standard library only — script 13) |
 
 ---
 
@@ -128,6 +132,8 @@ bash scripts/01_check_replication.sh
 | Script 08 | **Primary stopped, sync replica promoted, sync requirement cleared** | **Yes — always** |
 | Script 09 | Replay delay cleared, follower caught up, extra demo rows remain | Only if you want clean data |
 | Script 10 | **Primary stopped, async replica promoted, writes lost** | **Yes — always** |
+| Script 11 / 12 | Replay delay cleared on exit, extra `conversation` rows remain | Only if you want clean data |
+| Script 13 | Runs on the separate five-partition cluster; replay delay cleared on exit, extra `chat_log` rows remain | Only if you want clean data: `docker compose -f partitions/docker-compose.yml down -v && docker compose -f partitions/docker-compose.yml up -d` |
 
 > **Scripts 08 and 10 are destructive to the topology.** Once you promote a
 > replica, the only supported way back to the original three-node cluster is the
@@ -502,6 +508,120 @@ rows are gone on the new leader — the exact failure the book warns about.
 
 ---
 
+## Problems with Replication Lag
+
+> *"If an application reads from an asynchronous follower, it may see outdated
+> information if the follower has fallen behind."* — DDIA, **Problems with
+> Replication Lag**
+
+### Consistent Prefix Reads
+
+> *"This guarantee says that if a sequence of writes happens in a certain order,
+> then anyone reading those writes will see them appear in the same order."* —
+> DDIA, **Consistent Prefix Reads**
+
+A single PostgreSQL follower replays one WAL in commit order, so it always shows a
+prefix of the leader's history. The anomaly needs **independent** replication
+streams (partitions). Scripts 11 and 12 simulate two partitions by reading each
+from a different follower: `questions` from the lagging async replica, `answers`
+from the up-to-date sync replica.
+
+📄 **Step-by-step testing guide:** [docs/consistent_prefix_reads.md](docs/consistent_prefix_reads.md)
+
+#### Script 11 — The violation: answer before question
+
+```bash
+bash scripts/11_demo_consistent_prefix_violation.sh 5 2   # lag secs, gap secs (optional)
+```
+
+```
+  LEADER                 Q ───────── A            (Q committed first)
+  "questions" follower   lags 5s ···········Q
+  "answers"   follower   fresh        A
+  observer               ─────────── [ A only ⚠ ] ── [ Q + A ]
+```
+
+**What it does:** delays replay on the async follower
+(`recovery_min_apply_delay`), writes Mr. Poons' question and then Mrs. Cake's
+answer to the leader, and polls each partition from its own follower. For about
+`lag − gap` seconds the observer sees **the answer with no question**.
+
+> **Reset:** ✅ not needed — the replay delay is cleared on exit.
+
+#### Script 12 — The guarantee: same partition, or track causality
+
+```bash
+bash scripts/12_demo_consistent_prefix_guarantee.sh 5 2   # lag secs, gap secs (optional)
+```
+
+**Part A:** both messages go to **one** partition, read from **one** (lagging)
+follower. The observer sees *nothing → question → question + answer*, never the
+answer alone.
+
+**Part B:** the partitions stay split as in script 11, but the answer stores the
+question's commit LSN (`depends_on_lsn`). The reader **holds the answer back**
+until the questions follower's `pg_last_wal_replay_lsn()` reaches it.
+
+Both parts report **0** answer-without-question samples under the same lag that
+broke script 11.
+
+> **Reset:** ✅ not needed — the replay delay is cleared on exit.
+
+#### Script 13 — Concurrent answers ordered by version vectors
+
+```bash
+python3 scripts/13_demo_concurrent_answers_version_vectors.py 6   # Bob's lag secs (optional)
+```
+
+> **Uses its own cluster: five partitions.** Script 13 doesn't use the
+> three-node cluster above. It needs **five independent partitions**, each with
+> its own leader, sync replica and async read replica (15 containers, about
+> 350 MiB), defined in `partitions/docker-compose.yml`. Like every script here,
+> it doesn't start containers itself. It checks the cluster first and tells you
+> what's missing.
+>
+> ```bash
+> docker compose -f partitions/docker-compose.yml up -d
+> until bash partitions/check_partitions.sh >/dev/null 2>&1; do sleep 2; done
+> ```
+>
+> Topology, ports and reset: [docs/partitioned_cluster.md](docs/partitioned_cluster.md).
+> Both clusters can run at the same time.
+
+📄 **Technical step-by-step:** [docs/concurrent_answers_version_vectors.md](docs/concurrent_answers_version_vectors.md)
+🎬 **Animated walkthrough:** open [docs/version_vectors_animation.html](docs/version_vectors_animation.html) in a browser
+
+```
+                     P1  Mr. Poons asks                    [P1 A0 B0 C0 D0]
+       ┌──────────┬──────┴───┬──────────┐
+      A1         B1         C1         D1   same instant  (all concurrent ‖)
+                  └─────────────► C2  Carol saw B1      [P1 A1 B1 C2 D1]  B1 → C2
+                       D2  Dave never saw B1 (lagging)  [P1 A1 B0 C1 D2]  B1 ‖ D2
+```
+
+**What it does:** four participants answer one question **at the same instant**,
+each writing to their **own partition's leader**, so no single log orders them. Every
+message carries a **version vector** (what its author had seen, plus their own
+tick). Then Carol replies after seeing everyone, and Dave replies with a partial
+view because Bob's partition lags. The script shows:
+
+- the vectors, where Bob's answer is on each node (leader ✓, slow follower ✗),
+  and the **happens-before vs concurrent** matrix computed from them;
+- **each person's screen**: Carol's app reads from the leader, the others read
+  through the followers, so Mr. Poons, Alice and Dave **hold back** *"Bob's
+  right"* while Bob and Carol show it;
+- the **delivery check** printed slot by slot (the row's vector vs the app's
+  "knows" vector): why C2 is held on Dave's screen, shown on Bob's, and released
+  on Alice's once B1 arrives;
+- a **naive** reader showing *"Bob's right"* before Bob's message, next to the
+  **causal** one;
+- a **deterministic total order** (sort by vector sum, then partition name), with
+  a check that all five screens end up identical.
+
+> **Reset:** ✅ not needed — the replay delay is cleared on exit.
+
+---
+
 ## Connecting Manually
 
 You can connect to any node with `psql` or any PostgreSQL client:
@@ -584,6 +704,13 @@ docker compose --profile newfollower down -v
 
 After `down -v`, `docker compose up -d` re-runs the full bootstrap from scratch.
 
+The five-partition cluster used by script 13 is a separate Compose project:
+
+```bash
+docker compose -f partitions/docker-compose.yml down      # stop, keep data
+docker compose -f partitions/docker-compose.yml down -v   # stop and delete its 15 volumes
+```
+
 ---
 
 ## File Structure
@@ -597,6 +724,10 @@ replication_demo/
 ├── replica/
 │   ├── setup.sh                Clones primary and starts each standby (idempotent on restart)
 │   └── restore_from_backup.sh  Bootstraps pg_replica_new from a base backup (script 04)
+├── partitions/                 Five independent partition clusters for script 13
+│   ├── docker-compose.yml      5 × (leader + sync replica + async read replica)
+│   ├── init.sql                Replication user + chat_log table on each leader
+│   └── check_partitions.sh     Waits/verifies both replicas stream in every partition
 └── scripts/                                  # numbered to follow the book's flow
     ├── 01_check_replication.sh             Leaders & Followers — topology and lag
     ├── 02_write_and_read.sh                Leaders & Followers — write on leader, read on followers
@@ -607,5 +738,8 @@ replication_demo/
     ├── 07_demo_wal_retention.sh            Follower failure — wal_keep_size vs replication slot
     ├── 08_demo_failover.sh                 Leader failure — manual failover (promote sync replica)
     ├── 09_demo_choose_new_leader.sh        Leader failure — pick the most up-to-date follower
-    └── 10_demo_async_failover_data_loss.sh Leader failure — async failover discards committed writes
+    ├── 10_demo_async_failover_data_loss.sh Leader failure — async failover discards committed writes
+    ├── 11_demo_consistent_prefix_violation.sh  Replication lag — answer seen before its question
+    ├── 12_demo_consistent_prefix_guarantee.sh  Replication lag — same partition / causal LSN tracking
+    └── 13_demo_concurrent_answers_version_vectors.py  Concurrent writers — version vectors, causal order
 ```

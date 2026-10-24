@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four Answers, One Order</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: storyboard — partition logs (left) beside the caption and comparison (right); transport bar; then one screen per person across the bottom. */
+:root {
+  --bg: #f2f4f7;
+  --surface: #ffffff;
+  --sunk: #e9edf2;
+  --ink: #1a2130;
+  --muted: #5c6678;
+  --line: #d9dee6;
+  --warn: #b86a00;
+  --warn-bg: #fff3df;
+  --ok: #23845a;
+  --p: #5d6676;  /* Mr. Poons */
+  --a: #0d8789;  /* Alice */
+  --b: #2d68d6;  /* Bob */
+  --c: #8549d2;  /* Carol */
+  --d: #c9406f;  /* Dave */
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f131a; --surface: #171c26; --sunk: #1f2633; --ink: #e5e9f0; --muted: #9aa4b5;
+    --line: #2b3342; --warn: #f0a443; --warn-bg: #3a2a12; --ok: #4cc28c;
+    --p: #9aa3b3; --a: #3cc2c4; --b: #6d9cf2; --c: #b48cf0; --d: #f07aa3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f131a; --surface: #171c26; --sunk: #1f2633; --ink: #e5e9f0; --muted: #9aa4b5;
+  --line: #2b3342; --warn: #f0a443; --warn-bg: #3a2a12; --ok: #4cc28c;
+  --p: #9aa3b3; --a: #3cc2c4; --b: #6d9cf2; --c: #b48cf0; --d: #f07aa3;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 40px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: grid; gap: 6px; }
+h1 { font: 700 clamp(26px, 4vw, 38px)/1.1 var(--font-display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 75ch; }
+code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
+.eyebrow { font: 600 11px/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+/* ── stage ─────────────────────────────────────────── */
+.stage { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.side { display: grid; gap: 12px; align-content: start; min-width: 0; }
+
+.lanes { display: grid; gap: 6px; }
+.lane { display: grid; grid-template-columns: 172px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 8px; background: var(--sunk); position: relative; }
+@media (max-width: 520px) { .lane { grid-template-columns: minmax(0, 1fr); } }
+.who { display: flex; gap: 9px; align-items: center; min-width: 0; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  font: 700 14px/1 var(--font-display); color: var(--surface); background: var(--pc); }
+.who-text { display: grid; gap: 3px; min-width: 0; }
+.who-name { font-weight: 600; font-size: 14px; line-height: 1.1; }
+.knows { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.track { display: flex; gap: 6px; flex-wrap: wrap; min-height: 40px; align-items: center; }
+.slow { position: absolute; right: 8px; top: -9px; font: 600 10.5px/1 var(--font-body); letter-spacing: .03em;
+  padding: 4px 7px; border-radius: 99px; background: var(--warn-bg); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); transition: all .4s; }
+.slow.done { background: var(--surface); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+
+/* vectors */
+.vec { display: inline-flex; gap: 2px; font: 500 11px/1 var(--font-mono); }
+.vec span { min-width: 17px; padding: 3px 0; text-align: center; border-radius: 3px;
+  background: color-mix(in srgb, var(--vc) 14%, var(--surface)); color: var(--ink); border-bottom: 2px solid var(--vc); }
+.vec span.zero { color: var(--muted); border-bottom-color: color-mix(in srgb, var(--vc) 35%, transparent); background: var(--surface); }
+.vec span.flash { animation: flash 1.1s ease-out; }
+@keyframes flash { 0% { background: var(--vc); color: var(--surface); transform: scale(1.25); } 100% { transform: none; } }
+
+/* message chips in lanes */
+.chip { display: grid; gap: 4px; padding: 6px 7px; border-radius: 7px; background: var(--surface); border: 1.5px solid var(--pc); transition: opacity .4s; }
+.chip .lbl { font: 600 12px/1 var(--font-mono); color: var(--pc); display: flex; justify-content: space-between; gap: 8px; }
+.chip .lbl small { font-weight: 400; color: var(--muted); }
+.chip.ghost { border-style: dashed; opacity: .55; }
+.chip.hl { box-shadow: 0 0 0 3px color-mix(in srgb, var(--pc) 30%, transparent); }
+
+/* caption */
+.caption { display: grid; gap: 6px; }
+.caption .step { font: 600 12px/1 var(--font-mono); color: var(--muted); }
+.caption h2 { margin: 0; font: 700 21px/1.2 var(--font-display); text-wrap: balance; }
+.caption p { margin: 0; font-size: 14.5px; }
+.caption .rule { margin-top: 2px; padding: 8px 10px; background: var(--sunk); border-radius: 6px; font-size: 13.5px; }
+
+/* compare box */
+.compare { border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; min-height: 120px; display: grid; gap: 8px; align-content: center; }
+.compare .empty { color: var(--muted); font-size: 13px; }
+.cmp-grid { display: grid; grid-template-columns: auto repeat(5, 24px); gap: 4px 3px; align-items: center; font: 500 12px/1 var(--font-mono); }
+.cmp-grid .rowlbl { padding-right: 8px; font-weight: 600; }
+.cmp-grid .cell { text-align: center; padding: 4px 0; border-radius: 3px; background: color-mix(in srgb, var(--vc) 14%, var(--surface)); border-bottom: 2px solid var(--vc); }
+.cmp-grid .rel { text-align: center; color: var(--muted); }
+.cmp-grid .rel.gt { color: var(--ink); font-weight: 700; }
+.verdict { font-size: 13.5px; }
+.verdict b { font-family: var(--font-mono); }
+
+/* where-is-B1 panel */
+.where { display: grid; gap: 8px; }
+.where-title { font: 600 13.5px/1.2 var(--font-display); }
+.path { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: stretch; }
+@media (max-width: 520px) { .path { grid-template-columns: minmax(0, 1fr); } }
+.node { display: grid; gap: 3px; align-content: start; padding: 8px 10px; border-radius: 8px; background: var(--sunk); border: 1.5px solid var(--line); font-size: 12.5px; min-width: 0; }
+.node b { font-size: 13px; }
+.node .state { font-weight: 600; }
+.node small { color: var(--muted); font-size: 11.5px; }
+.node.ok { border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
+.node.ok .state { color: var(--ok); }
+.node.wait { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.node.wait .state { color: var(--warn); }
+.arrow { align-self: center; text-align: center; font: 500 11px/1.3 var(--font-mono); color: var(--muted); }
+.arrow .line { display: block; height: 2px; width: 56px; margin: 4px auto; background: linear-gradient(90deg, var(--b) 50%, transparent 50%) 0 0 / 12px 2px; animation: stream .8s linear infinite; }
+@keyframes stream { to { background-position: 12px 0; } }
+.bar { height: 6px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: var(--fill); background: var(--warn); }
+.node.ok .bar i { background: var(--ok); }
+
+/* delivery path diagram */
+.flow { display: grid; }
+.flow-title { font: 600 13.5px/1.2 var(--font-display); margin-bottom: 6px; }
+.fnode { border: 1.5px solid var(--line); border-radius: 8px; padding: 7px 10px; background: var(--sunk); display: grid; gap: 4px; font-size: 12.5px; min-width: 0; transition: border-color .3s; }
+.fnode.on { border-color: var(--ink); background: var(--surface); }
+.fnode .fhead { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.fnode b { font: 600 13px/1.2 var(--font-display); }
+.fnode small { color: var(--muted); font-size: 11.5px; }
+.fnode .doing { color: var(--ink); }
+.rows { display: grid; grid-template-columns: auto auto auto; gap: 3px 10px; align-items: center; font: 500 11.5px/1.2 var(--font-mono); justify-content: start; }
+.rows .rid { font-weight: 600; }
+.rows .new { animation: rowin .6s ease-out; }
+@keyframes rowin { from { background: color-mix(in srgb, var(--ok) 30%, transparent); } }
+.rep { display: flex; gap: 6px; justify-content: space-between; flex-wrap: wrap; font-size: 12px; }
+.rep .st { font-family: var(--font-mono); font-size: 11.5px; }
+.rep .st.ok { color: var(--ok); } .rep .st.wait { color: var(--warn); }
+.flink { display: flex; align-items: center; gap: 10px; min-height: 28px; padding-left: 24px; font: 500 11px/1.3 var(--font-mono); color: var(--muted); }
+.flink .wire { flex: none; width: 2px; align-self: stretch; background: var(--line); }
+.flink.on { color: var(--ink); }
+.flink.on .wire { background: linear-gradient(180deg, var(--b) 55%, transparent 55%) 0 0 / 2px 10px; animation: wire-down .6s linear infinite; }
+.flink.on.up .wire { animation-name: wire-up; }
+@keyframes wire-down { to { background-position: 0 10px; } }
+@keyframes wire-up { to { background-position: 0 -10px; } }
+.msg.pending { opacity: .7; border-left-style: dashed; }
+.msg.pending .flag { color: var(--muted); }
+.glow { outline: 2px solid color-mix(in srgb, var(--b) 50%, transparent); outline-offset: 3px; border-radius: 4px; }
+
+/* delivery check, two-jobs and ordering panels */
+.check { display: grid; gap: 6px; }
+.check + .check { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+.check-title { font: 600 13.5px/1.25 var(--font-display); }
+.ctable { display: grid; grid-template-columns: auto auto auto minmax(0, 1fr) auto; gap: 3px 10px; align-items: center; font: 500 12px/1.3 var(--font-mono); }
+.ctable .h { font: 600 10.5px/1.2 var(--font-body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.ctable .slot { font-weight: 600; }
+.ctable .test { color: var(--muted); font-family: var(--font-body); font-size: 12px; }
+.ctable .ok { color: var(--ok); font-weight: 700; }
+.ctable .bad { color: var(--warn); font-weight: 700; }
+.ctable .row-bad { background: var(--warn-bg); border-radius: 3px; }
+.outcome { font-size: 13px; padding: 6px 9px; border-radius: 6px; background: var(--sunk); }
+.outcome.ok { border-left: 3px solid var(--ok); }
+.outcome.bad { border-left: 3px solid var(--warn); }
+.jobs { display: grid; gap: 8px; }
+.job { display: grid; gap: 3px; padding: 9px 11px; border-radius: 8px; background: var(--sunk); font-size: 12.5px; }
+.job b { font: 600 13.5px/1.2 var(--font-display); }
+.job dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; }
+.job dt { color: var(--muted); }
+.job dd { margin: 0; }
+.why { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; font-size: 12.5px; padding-top: 6px; border-top: 1px solid var(--line); }
+.why dt { color: var(--muted); }
+.why dd { margin: 0; }
+.order { display: grid; grid-template-columns: auto auto auto minmax(0, 1fr); gap: 4px 10px; align-items: center; font-size: 12.5px; }
+.order .rid { font: 600 12px/1 var(--font-mono); }
+.order .sig { font: 600 12px/1 var(--font-mono); color: var(--muted); }
+
+/* controls */
+.controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+button { font: 600 14px/1 var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible { outline: 2px solid var(--b); outline-offset: 2px; }
+button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); min-width: 96px; }
+button:disabled { opacity: .4; cursor: default; }
+.dots { display: flex; gap: 5px; flex-wrap: wrap; margin-left: auto; }
+.dots button { width: 26px; height: 26px; padding: 0; border-radius: 50%; font: 500 11px/1 var(--font-mono); }
+.dots button[aria-current="step"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.hint { font-size: 12px; color: var(--muted); }
+
+/* one screen per person */
+.screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.screen { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--pc); border-radius: 10px; padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.screen-head { display: flex; gap: 8px; align-items: center; }
+.screen-head .avatar { width: 26px; height: 26px; font-size: 12px; }
+.screen-head b { font: 600 14px/1.1 var(--font-display); }
+.screen-head small { display: block; font-size: 11px; color: var(--muted); }
+.screen.naive { border-style: dashed; border-top-style: solid; }
+.mode { margin-left: auto; font: 600 10px/1 var(--font-body); letter-spacing: .05em; text-transform: uppercase; padding: 3px 6px; border-radius: 99px; background: var(--sunk); color: var(--muted); }
+.screen.naive .mode { background: var(--warn-bg); color: var(--warn); }
+.list { display: grid; gap: 4px; min-height: 34px; }
+.msg { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; align-items: baseline; padding: 5px 7px; border-radius: 6px; background: var(--sunk); border-left: 3px solid var(--pc); font-size: 12.5px; line-height: 1.3; }
+.msg .id { font: 600 11px/1 var(--font-mono); color: var(--pc); }
+.msg .sigma { font: 600 10.5px/1 var(--font-mono); color: var(--muted); white-space: nowrap; }
+.msg.mine { background: color-mix(in srgb, var(--pc) 10%, var(--sunk)); }
+.msg.warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.msg .flag { display: block; color: var(--warn); font-size: 11px; font-weight: 600; margin-top: 2px; }
+.held { display: grid; gap: 4px; padding: 6px; border-radius: 7px; border: 1px dashed var(--line); }
+.held.has { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.held .eyebrow { font-size: 10px; }
+.held.has .eyebrow { color: var(--warn); }
+.held-empty { font-size: 11.5px; color: var(--muted); }
+.held .msg { opacity: .8; }
+.screen-foot { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--muted); }
+
+.token { position: fixed; z-index: 50; pointer-events: none; font: 600 12px/1 var(--font-mono); padding: 5px 7px; border-radius: 6px; background: var(--pc); color: var(--surface); }
+
+@media (prefers-reduced-motion: reduce) {
+  .vec span.flash { animation: none; }
+  .arrow .line, .flink.on .wire, .rows .new { animation: none; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Four Answers, One Order</h1>
+    <p class="lede">A replay of script 13. Four people answer Mr. Poons at the same instant, two of them reply to what they saw, and Bob's messages reach most readers late. Each person has their own screen below. Version vectors let every screen work out who saw what, hold back replies that arrive too early, and end up in the same order.</p>
+  </header>
+
+  <section class="stage">
+    <div class="panel">
+      <span class="eyebrow">Partitions · each person appends only to their own log</span>
+      <div class="lanes" id="lanes"></div>
+    </div>
+    <div class="side">
+      <section class="panel caption" aria-live="polite">
+        <span class="step" id="stepNo"></span>
+        <h2 id="stepTitle"></h2>
+        <p id="stepText"></p>
+        <div class="rule" id="stepRule" hidden></div>
+      </section>
+      <div class="compare" id="compare"></div>
+    </div>
+  </section>
+
+  <div class="controls">
+    <button id="back" type="button">← Back</button>
+    <button id="play" type="button" class="primary">▶ Play</button>
+    <button id="next" type="button">Next →</button>
+    <span class="hint">or use ← → keys</span>
+    <div class="dots" id="dots"></div>
+  </div>
+
+  <section class="panel">
+    <span class="eyebrow">What each person's screen shows</span>
+    <div class="screens" id="screens"></div>
+  </section>
+</div>
+
+<script>
+const PARTS = ["p", "a", "b", "c", "d"];
+const PEOPLE = {
+  p: { name: "Mr. Poons", init: "P" }, a: { name: "Alice", init: "A" }, b: { name: "Bob", init: "B" },
+  c: { name: "Carol", init: "C" }, d: { name: "Dave", init: "D" },
+};
+// Where each person's app reads from (script 13: Carol uses FROM_LEADER, the rest READ_FROM).
+const READS = { p: "replicas", a: "replicas", b: "replicas", c: "leader", d: "replicas" };
+const MSG = {
+  P1: { part: "p", vv: [1,0,0,0,0], text: "How far into the future can you see, Mrs. Cake?" },
+  A1: { part: "a", vv: [1,1,0,0,0], t: ".582", text: "About ten seconds, I think." },
+  B1: { part: "b", vv: [1,0,1,0,0], t: ".577", text: "Ten seconds usually, it's in the book." },
+  C1: { part: "c", vv: [1,0,0,1,0], t: ".577", text: "Isn't it a whole minute?" },
+  D1: { part: "d", vv: [1,0,0,0,1], t: ".589", text: "No idea, I'd like to know too." },
+  C2: { part: "c", vv: [1,1,1,2,1], text: "Bob's right, it's ten seconds. I was wrong." },
+  D2: { part: "d", vv: [1,1,0,1,2], text: "Agree with Alice." },
+};
+const COMMIT_ORDER = ["P1","B1","C1","A1","D1","C2","D2"];   // wall-clock order from the run
+const seqOf = id => +id.slice(1);
+const pi = id => PARTS.indexOf(MSG[id].part);
+const sum = id => MSG[id].vv.reduce((x, y) => x + y, 0);
+const canonical = ids => [...ids].sort((x, y) => sum(x) - sum(y) || pi(x) - pi(y));
+const ANSWERS = ["P1","A1","B1","C1","D1"];
+const ALL = ["P1","A1","B1","C1","D1","C2","D2"];
+
+const STEPS = [
+  {
+    title: "Five people, five logs",
+    text: "Each person writes only to their own partition, so no single log puts their messages in order. Every message carries a version vector: five counters in the order P A B C D. Below, each person has their own screen. Carol's app reads from the leader. Everyone else's app reads through replicas, and the replica that serves Bob's log runs 6 seconds behind.",
+    rule: "Read a vector like <code>[1 1 0 0 0]</code> as: “written after seeing Poons' 1st message and Alice's 1st message, and nothing from Bob, Carol or Dave.”",
+    lanes: [], reached: [], slow: true,
+  },
+  {
+    title: "Mr. Poons asks the question",
+    text: "Mr. Poons has seen nothing yet. He writes message 1 to his own log and adds one to his own counter, so P1 is [1 0 0 0 0]. Only his own screen shows it so far. Your own messages always show on your own screen.",
+    rule: "Writing = take what you know, then +1 in your own slot.",
+    lanes: ["P1"], reached: [], fresh: ["P1"], slow: true,
+  },
+  {
+    title: "Everyone reads the question",
+    text: "P1 reaches every screen. Alice, Bob, Carol and Dave each see P1 and nothing else, so each \"knows\" vector becomes [1 0 0 0 0].",
+    rule: "Reading = for every log, remember the highest message number your screen has shown.",
+    lanes: ["P1"], reached: ["P1"], slow: true,
+    flies: [["P1","a"],["P1","b"],["P1","c"],["P1","d"]],
+  },
+  {
+    title: "Each app builds its answer and sends it",
+    text: "Alice, Bob, Carol and Dave press Send at the same moment. Each app takes the \"knows\" vector it holds in memory, [1 0 0 0 0], adds one in its own slot, and sends the message to the chat backend over its WebSocket. Nothing is in the database yet, so each screen shows the answer as \"sending…\". (Script 13 polls the database with psql instead of using WebSockets. Steps 4 to 8 show how a real chat app would move the same data.)",
+    rule: `What Alice's app sends: <code>{"part": "alice", "seq": 1, "body": "About ten seconds, I think.", "vv": {"P": 1, "A": 1}}</code>`,
+    lanes: ["P1"], reached: ["P1"], sending: ["A1","B1","C1","D1"], slow: true, flow: "send",
+  },
+  {
+    title: "The backend writes four rows on the leader",
+    text: "For each message, the backend runs one INSERT on the leader. The vector goes into the row's vv column, next to the text. All four commit within 12 ms: .577, .577, .582 and .589 seconds. Bob and Carol landed in the same millisecond, so clocks can't say who answered first. After each commit, the backend sends an acknowledgement back over that person's WebSocket, and their screen marks the message as sent.",
+    rule: "A row's vv is written once, by its INSERT, and never updated. It is the permanent record of what the author had seen when they wrote.",
+    lanes: ANSWERS, reached: ["P1"], slow: true, flow: "insert",
+  },
+  {
+    title: "The leader streams the rows to its replicas",
+    text: "The leader writes every change to its WAL and streams it to both replicas within milliseconds. The fast replica applies the four rows right away. The slow replica receives them too, but waits 6 seconds before applying anything. Readers only use the slow replica for Bob's log, so in practice only B1 is late.",
+    rule: "A replica is a copy of the leader's rows, vv column included. Nothing about the vectors changes on the way.",
+    lanes: ANSWERS, reached: ["P1"], slow: true, hl: ["B1"], flow: "wal",
+  },
+  {
+    title: "The backend pushes new rows to every open chat",
+    text: "After a commit, the backend announces it, for example with PostgreSQL's NOTIFY or a pub/sub channel. For each open chat, it then asks that person's read copy for rows newer than what their screen already has, and pushes them over the WebSocket. Carol's copy is the leader, so she gets all four answers. Mr. Poons, Alice and Dave get A1, C1 and D1, but B1 comes from the slow replica, which doesn't have it yet. Bob already has B1 because it's his own. Watch the \"knows\" vectors change as the rows land. The next step explains why.",
+    rule: "Per open chat, on that person's read copy: <code>SELECT part, seq, body, vv FROM chat_log WHERE part = :log AND seq &gt; :highest_seen</code>, then push the rows.",
+    lanes: ANSWERS, slow: true, flow: "push", flyNew: true,
+  },
+  {
+    title: "Each app updates its own \"knows\" vector",
+    text: "When rows arrive, the app checks each row's vv. It shows a row if nothing that row depends on is missing, then raises its \"knows\" vector to the highest message number it now shows from each log. Alice goes from [1 1 0 0 0] (the question and her own answer) to [1 1 0 1 1]. Bob and Carol go to [1 1 1 1 1]. All of this happens in each app's memory. Nothing in the database changed: A1's row still says [1 1 0 0 0].",
+    rule: "Two kinds of vector. A message's vv is stored in its row and never changes. A person's \"knows\" vector lives in their app and grows as messages arrive. When they write next, it becomes that message's vv.",
+    lanes: ANSWERS, slow: true, flow: "memory", hlKnows: true,
+  },
+  {
+    title: "How an app decides whether to show a row",
+    text: "Look back at step 7, when A1 arrived at Dave's app. Before showing a row, the app compares the row's vv with its own \"knows\" vector, slot by slot. For every other log, the row must not need more than Dave's screen already shows. For the row's own log, the row must be the next message, so nothing from Alice gets skipped. A1 passes every test, so Dave's app shows it and raises its \"knows\" vector.",
+    rule: "This is the delivery check. It runs in the app, on every row that arrives, and decides one thing: show the row now, or hold it back.",
+    lanes: ANSWERS, slow: true, check: [{ app: "d", msg: "A1", knows: [1,0,0,0,1] }],
+  },
+  {
+    title: "Two comparisons, two jobs",
+    text: "Vectors get compared in two places, both inside each person's app. The delivery check compares an incoming row with the app's \"knows\" vector, to decide whether the row can be shown yet. The ordering comparison compares two messages with each other, to decide whether one has to stay above the other. In this design, the backend and the database never compare vectors. They only store and move them.",
+    lanes: ANSWERS, slow: true, jobs: true,
+  },
+  {
+    title: "Ordering comparison: A1 and B1 are concurrent",
+    text: "When an app places A1 and B1 on screen, it compares their vectors slot by slot. A1 is bigger in A, and B1 is bigger in B. Each has something the other lacks, so neither author had seen the other's answer when writing. That means neither one has to go first. All six pairs of answers come out the same way.",
+    rule: "If one vector is ≤ the other in every slot, it happened before and must stay above. If each is bigger somewhere, the two are concurrent (‖) and the order is free.",
+    lanes: ANSWERS, slow: true, hl: ["A1","B1"], compare: ["A1","B1"],
+  },
+  {
+    title: "Where is B1 when Carol reads?",
+    text: "Bob's INSERT finished on the leader at 08:34:39.577, together with the other three answers. A write only has to succeed on the leader: once the leader commits it, B1 exists. The leader streams the change (its WAL) to the replicas within milliseconds. The slow replica receives B1 right away but waits 6 seconds before applying it. Carol's app reads from the leader, so she already sees B1. Mr. Poons, Alice and Dave read through the slow replica, so they don't.",
+    rule: "A write is finished once the leader commits it. Lag only decides when each copy shows it.",
+    lanes: ANSWERS, slow: true, hl: ["B1"], where: "waiting",
+  },
+  {
+    title: "Carol replies to Bob",
+    text: "Carol's screen shows all five messages, so her \"knows\" vector is [1 1 1 1 1]. She writes C2 (\"Bob's right\") and adds one in her slot, giving [1 1 1 2 1]. Comparing B1 with C2 now gives a forced order: C2 came after B1. That has two consequences on every screen. C2 must sit below B1, and C2 can't be shown at all until B1 is.",
+    rule: "B1 [1 0 1 0 0] ≤ C2 [1 1 1 2 1] in every slot, so B1 → C2.",
+    lanes: [...ANSWERS, "C2"], reached: ANSWERS, slow: true, hl: ["B1","C2"], compare: ["B1","C2"], fresh: ["C2"],
+  },
+  {
+    title: "Three screens hold C2 back",
+    text: "C2 reaches every screen quickly, because Carol's log isn't slow. Each app runs the delivery check on it. Bob's app has B1, so every slot passes and C2 is shown. Alice's app (like Mr. Poons' and Dave's) fails the B slot: C2 needs Bob's 1st message, and her screen shows none. Showing C2 there would put \"Bob's right\" on screen with no Bob message, so the app parks it under \"Held back\" and checks it again whenever new rows arrive.",
+    rule: "Same row, same rule, different result: the outcome depends on what each screen already shows.",
+    lanes: [...ANSWERS, "C2"], slow: true, hl: ["C2"],
+    check: [{ app: "a", msg: "C2", knows: [1,1,0,1,1] }, { app: "b", msg: "C2", knows: [1,1,1,1,1] }],
+  },
+  {
+    title: "Dave replies without ever seeing Bob",
+    text: "Dave's screen shows P1, A1, C1 and D1, with C2 held back. So his \"knows\" vector is [1 1 0 1 1]. He writes D2 (\"Agree with Alice\") as [1 1 0 1 2]. The B slot is 0, which records that Dave never saw Bob's answer. The ordering comparison says D2 and B1 are concurrent, so D2 doesn't have to wait for B1. Every screen passes D2's delivery check and shows it right away, even the ones still missing B1.",
+    rule: "B1 [1 0 1 0 0] vs D2 [1 1 0 1 2]: B1 is bigger in B, D2 is bigger in A, C and D, so they are concurrent (‖).",
+    lanes: ALL, slow: true, hl: ["B1","D2"], compare: ["B1","D2"], fresh: ["D2"],
+  },
+  {
+    title: "What if the apps ignored the vectors?",
+    text: "Here every app shows whatever it has, sorted by commit time, with no hold-back. Mr. Poons, Alice and Dave now see \"Bob's right\" with no Bob message above it. In the real run that happened in 8 of 12 samples. Bob's and Carol's screens look fine, because they already have B1. The problem only hits people reading through the lagging copy.",
+    lanes: ALL, slow: true, naive: true,
+  },
+  {
+    title: "Bob's replica catches up, and held rows are re-checked",
+    text: "About 6 seconds after Bob wrote it, the slow replica applies B1, and the backend pushes it to Mr. Poons, Alice and Dave. B1 passes their delivery check right away. Each app then re-runs the check on the rows it was holding. C2 needed B1, which is now on screen, so this time every slot passes and C2 appears. Below is Alice's re-check. All five screens now have all seven messages.",
+    lanes: ALL, caughtUp: true, hl: ["B1","C2"],
+    check: [{ app: "a", msg: "C2", knows: [1,1,1,1,2] }],
+    flyNew: true,
+  },
+  {
+    title: "Same order on every screen",
+    text: "Each screen sorts by the sum of the vector (Σ). A reply has seen everything its cause has seen, plus at least one more message, so its Σ is always larger and it can never appear above what it replies to. Equal sums only happen between concurrent messages, and those ties are broken by name, P, A, B, C, D. That's why all five screens now show exactly the same list.",
+    rule: "D2 (Σ5) shows before C2 (Σ6). They are concurrent, so either order is correct. Σ just makes every screen pick the same one.",
+    lanes: ALL, caughtUp: true, sigma: true, order: true,
+  },
+];
+
+/* What person `u` can show at step `s`: their own messages, plus whatever has
+   reached readers (minus B1 for replica readers while Bob's replica lags),
+   delivered causally from the vectors. */
+function screenOf(s, u) {
+  const reached = s.reached || s.lanes;
+  let avail = s.lanes.filter(id => reached.includes(id) || MSG[id].part === u);
+  if (s.slow && READS[u] === "replicas") avail = avail.filter(id => id !== "B1" || u === "b");
+  const knows = [0,0,0,0,0], shown = [];
+  let pending = [...avail], progress = true;
+  while (progress) {
+    progress = false;
+    for (const id of [...pending]) {
+      const i = pi(id), vv = MSG[id].vv;
+      if (seqOf(id) === knows[i] + 1 && vv.every((n, k) => k === i || knows[k] >= n)) {
+        shown.push(id); knows[i] = seqOf(id);
+        pending = pending.filter(x => x !== id); progress = true;
+      }
+    }
+  }
+  const have = [0,0,0,0,0];
+  avail.forEach(id => { have[pi(id)] = Math.max(have[pi(id)], seqOf(id)); });
+  const broken = avail.filter(id => MSG[id].vv.some((n, k) => k !== pi(id) && have[k] < n));
+  const sending = (s.sending || []).filter(id => MSG[id].part === u);
+  return { avail, shown: canonical(shown), held: pending, knows, broken, have, sending };
+}
+const missing = (id, knows) => PARTS.filter((p, k) => k !== pi(id) && knows[k] < MSG[id].vv[k])
+  .map(p => p.toUpperCase() + MSG[id].vv[PARTS.indexOf(p)]).join(", ");
+
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = id => document.getElementById(id);
+const pc = part => `var(--${part})`;
+let step = 0, playing = false, timer = null;
+
+function vecEl(vv, prev) {
+  const el = document.createElement("span");
+  el.className = "vec";
+  vv.forEach((n, i) => {
+    const s = document.createElement("span");
+    s.textContent = PARTS[i].toUpperCase() + n;
+    s.style.setProperty("--vc", pc(PARTS[i]));
+    if (n === 0) s.classList.add("zero");
+    if (prev && prev[i] !== n && !reduced) s.classList.add("flash");
+    el.appendChild(s);
+  });
+  return el;
+}
+
+/* lanes */
+const laneEls = {};
+function buildLanes() {
+  PARTS.forEach(part => {
+    const lane = document.createElement("div");
+    lane.className = "lane";
+    lane.style.setProperty("--pc", pc(part));
+    lane.innerHTML = `<div class="who"><span class="avatar">${PEOPLE[part].init}</span>
+      <div class="who-text"><span class="who-name">${PEOPLE[part].name}</span><span class="knows">knows <span class="vslot"></span></span></div></div>
+      <div class="track"></div>${part === "b" ? '<span class="slow"></span>' : ""}`;
+    $("lanes").appendChild(lane);
+    laneEls[part] = { avatar: lane.querySelector(".avatar"), vslot: lane.querySelector(".vslot"),
+                      track: lane.querySelector(".track"), slow: lane.querySelector(".slow"), shown: null };
+  });
+}
+function renderKnows(s) {
+  PARTS.forEach(part => {
+    const L = laneEls[part], vv = screenOf(s, part).knows;
+    if (L.shown && L.shown.join() === vv.join()) { L.vslot.classList.toggle("glow", !!s.hlKnows); return; }
+    L.vslot.replaceChildren(vecEl(vv, L.shown));
+    L.shown = vv;
+  });
+  PARTS.forEach(part => laneEls[part].vslot.classList.toggle("glow", !!s.hlKnows));
+}
+function renderLanes(s) {
+  PARTS.forEach(part => {
+    const L = laneEls[part];
+    const ids = s.lanes.filter(id => MSG[id].part === part);
+    const have = new Map([...L.track.children].map(el => [el.dataset.id, el]));
+    have.forEach((el, id) => { if (!ids.includes(id)) el.remove(); });
+    ids.forEach(id => {
+      let el = have.get(id);
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "chip"; el.dataset.id = id;
+        el.style.setProperty("--pc", pc(part));
+        el.innerHTML = `<span class="lbl">${id}${MSG[id].t ? `<small>${MSG[id].t}s</small>` : ""}</span>`;
+        el.appendChild(vecEl(MSG[id].vv));
+        el.title = MSG[id].text;
+        L.track.appendChild(el);
+        if (!reduced) el.animate([{ opacity: 0, transform: "scale(.6)" }, { opacity: 1, transform: "none" }],
+                                 { duration: 450, easing: "cubic-bezier(.2,.9,.3,1.3)" });
+      }
+      el.classList.toggle("ghost", id === "B1" && !!s.slow);
+      el.classList.toggle("hl", (s.hl || []).includes(id));
+    });
+    if (L.slow) {
+      L.slow.classList.toggle("done", !!s.caughtUp);
+      L.slow.textContent = s.caughtUp ? "replica caught up" : "replica readers get this log 6 s late";
+    }
+  });
+}
+
+/* compare / where panel */
+function renderCompare(s) {
+  const box = $("compare");
+  if (s.flow) {
+    renderFlow(box, s.flow);
+  } else if (s.check) {
+    renderCheck(box, s.check);
+  } else if (s.jobs) {
+    renderJobs(box);
+  } else if (s.order) {
+    renderOrder(box);
+  } else if (s.where) {
+    const done = s.where === "done";
+    box.innerHTML = `<div class="where">
+      <span class="where-title">Where Bob's answer B1 is ${done ? "now" : "when Carol reads"}</span>
+      <div class="path">
+        <div class="node ok"><b>Leader</b><span>Bob's INSERT committed at 08:34:39.577</span>
+          <span class="state">✓ has B1</span><small>Carol's app reads here</small></div>
+        <div class="arrow">WAL<span class="line"></span>ms</div>
+        <div class="node ${done ? "ok" : "wait"}"><b>Bob's slow replica</b>
+          <span>${done ? "applied B1 after the 6 s hold" : "received B1, holding it for 6 s before applying"}</span>
+          <div class="bar"><i style="--fill:${done ? 100 : 3}%"></i></div>
+          <span class="state">${done ? "✓ has B1 since ≈ 08:34:45.6" : "✗ not visible until ≈ 08:34:45.6"}</span>
+          <small>Mr. Poons', Alice's and Dave's apps read here</small></div>
+      </div></div>`;
+  } else if (s.compare) {
+    const [x, y] = s.compare, vx = MSG[x].vv, vy = MSG[y].vv;
+    const grid = document.createElement("div");
+    grid.className = "cmp-grid";
+    const row = (lbl, vv) => {
+      grid.insertAdjacentHTML("beforeend", `<span class="rowlbl" style="color:${pc(MSG[lbl].part)}">${lbl}</span>`);
+      vv.forEach((n, i) => grid.insertAdjacentHTML("beforeend",
+        `<span class="cell" style="--vc:${pc(PARTS[i])}">${PARTS[i].toUpperCase()}${n}</span>`));
+    };
+    row(x, vx);
+    grid.insertAdjacentHTML("beforeend", `<span></span>`);
+    vx.forEach((n, i) => {
+      const r = n === vy[i] ? "=" : n > vy[i] ? ">" : "<";
+      grid.insertAdjacentHTML("beforeend", `<span class="rel ${r === "=" ? "" : "gt"}">${r}</span>`);
+    });
+    row(y, vy);
+    const xle = vx.every((n, i) => n <= vy[i]), yle = vy.every((n, i) => n <= vx[i]);
+    const bigger = (a, b) => PARTS.filter((_, i) => a[i] > b[i]).map(p => p.toUpperCase()).join(", ");
+    let verdict;
+    if (xle) verdict = `Every slot of <b>${x}</b> is ≤ <b>${y}</b>, so ${PEOPLE[MSG[y].part].name} had seen ${x}. <b>${x} → ${y}</b> (happened before).`;
+    else if (yle) verdict = `Every slot of <b>${y}</b> is ≤ <b>${x}</b>. <b>${y} → ${x}</b>.`;
+    else verdict = `<b>${x}</b> is bigger in ${bigger(vx, vy)}, <b>${y}</b> is bigger in ${bigger(vy, vx)}. Neither author saw the other: <b>${x} ‖ ${y}</b> (concurrent).`;
+    box.replaceChildren(grid);
+    box.insertAdjacentHTML("beforeend", `<div class="verdict">${verdict}</div>`);
+    const [first, second] = canonical([x, y]);
+    const result = xle || yle
+      ? `${xle ? y : x} must sit below ${xle ? x : y} on every screen, and no screen may show ${xle ? y : x} until it shows ${xle ? x : y}. The delivery check enforces the second part.`
+      : `No order is forced. So that every screen still agrees, each app uses the same tie-break: lower Σ first, then name. ${first} (Σ${sum(first)}) goes above ${second} (Σ${sum(second)}). Neither has to wait for the other.`;
+    box.insertAdjacentHTML("beforeend", `<dl class="why">
+      <dt>Where</dt><dd>in every person's app, when it places ${x} and ${y} on screen</dd>
+      <dt>Why</dt><dd>to find out whether one of them has to stay above the other</dd>
+      <dt>Result</dt><dd>${result}</dd></dl>`);
+  } else {
+    box.innerHTML = `<span class="empty">When two messages are compared, their vectors line up here slot by slot.</span>`;
+    return;
+  }
+  if (!reduced) box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 350 });
+}
+
+/* the delivery path: apps ⇄ WebSocket ⇄ backend ⇄ leader → replicas */
+function renderFlow(box, f) {
+  const rows = f === "send" ? ["P1"] : ANSWERS;
+  const node = (on, title, tag, body) =>
+    `<div class="fnode ${on ? "on" : ""}"><div class="fhead"><b>${title}</b><small>${tag}</small></div>${body}</div>`;
+  const link = (on, up, label) =>
+    `<div class="flink ${on ? "on" : ""} ${up ? "up" : ""}"><span class="wire"></span><span>${on ? label : ""}</span></div>`;
+  const apps = {
+    send: "each app: vv = knows + 1 in own slot, then send",
+    insert: "own message: “sending…” → sent ✓",
+    wal: "waiting for news",
+    push: "rows arrive over each WebSocket",
+    memory: "check each vv → show or hold → raise “knows” (in memory)",
+  }[f];
+  const backend = {
+    send: "receives 4 messages",
+    insert: "INSERT each row, then ack its sender",
+    wal: "idle",
+    push: "per open chat: fetch newer rows from that person's read copy, push them",
+    memory: "idle",
+  }[f];
+  const table = `<div class="rows">${rows.map(id =>
+      `<span class="rid" style="color:${pc(MSG[id].part)}">${id}</span><span>${PEOPLE[MSG[id].part].name.replace("Mr. ", "")}, seq ${seqOf(id)}</span><span data-vv="${id}"></span>`
+    ).join("")}</div>`;
+  const leaderNote = { send: "only the question so far", insert: "4 new rows · vv written once, never updated",
+    wal: "streaming its WAL", push: "Carol's app reads here", memory: "unchanged: A1 still has vv [1 1 0 0 0]" }[f];
+  const replicated = ["wal", "push", "memory"].includes(f);
+  const replicas = `<div class="rep"><span>Fast replica</span><span class="st ${replicated ? "ok" : ""}">${replicated ? "P1 A1 B1 C1 D1 ✓" : "P1"}</span></div>
+    <div class="rep"><span>Slow replica <small>(Bob's log read here)</small></span><span class="st ${replicated ? "wait" : ""}">${replicated ? "4 rows received, applied in 6 s" : "P1"}</span></div>`;
+  box.innerHTML = `<div class="flow">
+    <span class="flow-title">How the answers travel</span>
+    ${node(["send", "insert", "push", "memory"].includes(f), "Chat apps", "browser, one per person", `<small class="doing">${apps}</small>`)}
+    ${link(f === "send" || f === "insert" || f === "push", f !== "send", { send: "WebSocket ↓ 4 messages, each with its vv", insert: "WebSocket ↑ ack: sent", push: "WebSocket ↑ new rows pushed" }[f])}
+    ${node(f === "send" || f === "insert" || f === "push", "Chat backend", "app server", `<small class="doing">${backend}</small>`)}
+    ${link(f === "insert" || f === "push", f === "push", { insert: "SQL ↓ INSERT … RETURNING", push: "NOTIFY + SELECT newer rows ↑" }[f])}
+    ${node(f === "insert" || f === "memory", "Leader", "chat_log table", `${table}<small class="doing">${leaderNote}</small>`)}
+    ${link(f === "wal", false, "WAL ↓ streamed within ms")}
+    ${node(f === "wal" || f === "push", "Replicas", "copies for reading", replicas)}
+  </div>`;
+  box.querySelectorAll("[data-vv]").forEach(el => el.appendChild(vecEl(MSG[el.dataset.vv].vv)));
+  if (f === "insert" && !reduced) box.querySelectorAll(".rows > span").forEach((el, i) => { if (i >= 3) el.classList.add("new"); });
+}
+
+/* the delivery check: one row's vv against one app's "knows" vector */
+function renderCheck(box, checks) {
+  box.innerHTML = checks.map(({ app, msg, knows }) => {
+    const vv = MSG[msg].vv, own = pi(msg), who = PEOPLE[app].name, author = PEOPLE[MSG[msg].part].name;
+    let pass = true;
+    const rows = PARTS.map((p, k) => {
+      const ok = k === own ? knows[k] === vv[k] - 1 : knows[k] >= vv[k];
+      pass = pass && ok;
+      const test = k === own
+        ? `next in ${author}'s log? shown ${knows[k]}, so the next is ${knows[k] + 1}`
+        : vv[k] === 0 ? "needs nothing from this log" : `needs ${p.toUpperCase()}${vv[k]}; screen shows up to ${p.toUpperCase()}${knows[k]}`;
+      const cls = ok ? "" : "row-bad";
+      return `<span class="slot ${cls}" style="color:${pc(p)}">${p.toUpperCase()}</span>
+        <span class="${cls}">${vv[k]}</span><span class="${cls}">${knows[k]}</span>
+        <span class="test ${cls}">${test}</span><span class="${ok ? "ok" : "bad"} ${cls}">${ok ? "✓" : "✗"}</span>`;
+    }).join("");
+    const after = knows.map((n, k) => (k === own ? vv[k] : n));
+    const outcome = pass
+      ? `<div class="outcome ok">✓ Show ${msg}. ${who}'s “knows” becomes [${after.join(" ")}].</div>`
+      : `<div class="outcome bad">✗ Hold ${msg} back: it needs ${missing(msg, knows)}, which isn't on ${who}'s screen yet. The app re-checks it whenever new rows arrive.</div>`;
+    return `<div class="check">
+      <span class="check-title">Delivery check in ${who}'s app: can ${msg} be shown?</span>
+      <div class="ctable"><span class="h">log</span><span class="h">${msg} needs</span><span class="h">${who.replace("Mr. ", "")} knows</span><span class="h">test</span><span class="h"></span>${rows}</div>
+      ${outcome}</div>`;
+  }).join("");
+}
+
+function renderJobs(box) {
+  box.innerHTML = `<div class="jobs">
+    <div class="job"><b>1 · Delivery check: can I show this row yet?</b><dl>
+      <dt>Where</dt><dd>in each app, every time a row arrives (and again for held rows)</dd>
+      <dt>Compares</dt><dd>the row's vv with the app's own “knows” vector</dd>
+      <dt>Result</dt><dd>show it now, or hold it back until what it depends on arrives</dd></dl></div>
+    <div class="job"><b>2 · Ordering: which of two messages goes first?</b><dl>
+      <dt>Where</dt><dd>in each app, when it places messages on screen</dd>
+      <dt>Compares</dt><dd>two messages' vv with each other</dd>
+      <dt>Result</dt><dd>X → Y: X must stay above Y. X ‖ Y: either order is fine, so every app uses the same tie-break (Σ, then name)</dd></dl></div>
+  </div>`;
+}
+
+function renderOrder(box) {
+  const notes = {
+    P1: "every other message depends on it",
+    A1: "concurrent with B1, C1, D1 · tie at Σ2 → by name",
+    B1: "tie at Σ2 → by name", C1: "tie at Σ2 → by name", D1: "tie at Σ2 → by name",
+    D2: "depends on P1, A1, C1, D1 · concurrent with C2",
+    C2: "depends on B1 and the rest · concurrent with D2, Σ puts it last",
+  };
+  box.innerHTML = `<div class="check"><span class="check-title">Ordering in every app: sort by Σ, then name</span>
+    <div class="order">${canonical(ALL).map(id => `<span class="rid" style="color:${pc(MSG[id].part)}">${id}</span>
+      <span data-vv="${id}"></span><span class="sig">Σ${sum(id)}</span><span>${notes[id]}</span>`).join("")}</div>
+    <div class="outcome ok">A reply always has a bigger Σ than what it replies to, so forced orders (→) are always kept. Σ and the name only decide between concurrent (‖) messages.</div></div>`;
+  box.querySelectorAll("[data-vv]").forEach(el => el.appendChild(vecEl(MSG[el.dataset.vv].vv)));
+}
+
+/* screens: keyed lists with FLIP so arrivals slide in and re-orders glide */
+function msgEl(id) {
+  const m = MSG[id];
+  const el = document.createElement("div");
+  el.className = "msg"; el.dataset.id = id;
+  el.style.setProperty("--pc", pc(m.part));
+  el.innerHTML = `<span class="id">${id}</span><span class="body">${m.text}</span><span class="sigma"></span>`;
+  el.title = `${PEOPLE[m.part].name}: ${m.text}`;
+  return el;
+}
+function renderList(container, ids, decorate) {
+  const before = new Map([...container.children].map(el => [el.dataset.id, el.getBoundingClientRect().top]));
+  const have = new Map([...container.children].map(el => [el.dataset.id, el]));
+  const els = ids.map(id => have.get(id) || msgEl(id));
+  have.forEach((el, id) => { if (!ids.includes(id)) el.remove(); });
+  els.forEach(el => { container.appendChild(el); decorate(el, el.dataset.id); });
+  if (reduced) return;
+  els.forEach(el => {
+    const old = before.get(el.dataset.id), now = el.getBoundingClientRect().top;
+    if (old === undefined) el.animate([{ opacity: 0, transform: "translateX(12px)" }, { opacity: 1, transform: "none" }], { duration: 420, easing: "ease-out" });
+    else if (Math.abs(old - now) > 1) el.animate([{ transform: `translateY(${old - now}px)` }, { transform: "none" }], { duration: 600, easing: "cubic-bezier(.3,.8,.3,1)" });
+  });
+}
+function setFlag(el, text) {
+  let f = el.querySelector(".flag");
+  if (!text) { if (f) f.remove(); return; }
+  if (!f) { f = document.createElement("span"); f.className = "flag"; el.querySelector(".body").appendChild(f); }
+  f.textContent = text;
+}
+
+const screenEls = {};
+function buildScreens() {
+  PARTS.forEach(u => {
+    const el = document.createElement("div");
+    el.className = "screen";
+    el.style.setProperty("--pc", pc(u));
+    el.innerHTML = `<div class="screen-head"><span class="avatar">${PEOPLE[u].init}</span>
+        <div><b>${PEOPLE[u].name}</b><small>${READS[u] === "leader" ? "app reads from the leader" : "app reads through replicas"}</small></div>
+        <span class="mode"></span></div>
+      <div class="list"></div>
+      <div class="held"><span class="eyebrow">Held back</span><div class="list"></div><span class="held-empty">Nothing waiting.</span></div>
+      <div class="screen-foot">knows <span class="vslot"></span></div>`;
+    $("screens").appendChild(el);
+    const [list, held] = el.querySelectorAll(".list");
+    screenEls[u] = { el, list, held, heldBox: el.querySelector(".held"), heldEmpty: el.querySelector(".held-empty"),
+                     mode: el.querySelector(".mode"), vslot: el.querySelector(".vslot"), shown: null };
+  });
+}
+function renderScreens(s) {
+  PARTS.forEach(u => {
+    const S = screenEls[u], v = screenOf(s, u);
+    S.el.classList.toggle("naive", !!s.naive);
+    S.mode.textContent = s.naive ? "no vectors" : "vectors";
+    const ids = s.naive ? COMMIT_ORDER.filter(id => v.avail.includes(id)) : [...v.shown, ...v.sending];
+    renderList(S.list, ids, (el, id) => {
+      const warn = !!s.naive && v.broken.includes(id);
+      el.classList.toggle("warn", warn);
+      const sending = v.sending.includes(id);
+      el.classList.toggle("mine", MSG[id].part === u);
+      el.classList.toggle("pending", sending);
+      setFlag(el, warn ? `⚠ needs ${missing(id, v.have)}, which isn't here` : sending ? "sending…" : "");
+      el.querySelector(".sigma").textContent = s.sigma ? "Σ" + sum(id) : "";
+    });
+    const held = s.naive ? [] : v.held;
+    renderList(S.held, held, (el, id) => setFlag(el, `waiting for ${missing(id, v.knows)}`));
+    S.heldBox.classList.toggle("has", held.length > 0);
+    S.heldEmpty.hidden = held.length > 0;
+    S.heldEmpty.textContent = s.naive ? "No hold-back without vectors." : "Nothing waiting.";
+    if (!S.shown || S.shown.join() !== v.knows.join()) { S.vslot.replaceChildren(vecEl(v.knows, S.shown)); S.shown = v.knows; }
+    S.vslot.classList.toggle("glow", !!s.hlKnows);
+  });
+}
+
+/* flying tokens: a copy of a message travelling to a person's screen */
+function fly(id, target, delay) {
+  const from = document.querySelector(`.track .chip[data-id="${id}"]`);
+  const u = target.startsWith("screen:") ? target.slice(7) : target;
+  const to = screenEls[u] && screenEls[u].list;
+  if (!from || !to) return;
+  const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+  const t = document.createElement("div");
+  t.className = "token"; t.textContent = id;
+  t.style.setProperty("--pc", pc(MSG[id].part));
+  t.style.left = a.left + "px"; t.style.top = a.top + "px";
+  document.body.appendChild(t);
+  const dx = b.left + 20 - a.left, dy = b.top + 6 - a.top;
+  t.animate([{ transform: "translate(0,0)", opacity: 0 }, { opacity: 1, offset: .15 },
+             { transform: `translate(${dx}px,${dy}px)`, opacity: 1, offset: .9 }, { transform: `translate(${dx}px,${dy}px) scale(.7)`, opacity: 0 }],
+            { duration: 950, delay, easing: "cubic-bezier(.45,.05,.35,1)", fill: "both" }).finished.then(() => t.remove());
+}
+
+function render(forward) {
+  const s = STEPS[step];
+  $("stepNo").textContent = `Step ${step + 1} of ${STEPS.length}`;
+  $("stepTitle").textContent = s.title;
+  $("stepText").textContent = s.text;
+  $("stepRule").hidden = !s.rule;
+  $("stepRule").innerHTML = s.rule || "";
+  renderLanes(s);
+  renderCompare(s);
+  let flies = s.flies || [];
+  if (s.flyNew && step > 0) {
+    const prev = STEPS[step - 1];
+    PARTS.forEach(u => {
+      const before = screenOf(prev, u).shown;
+      screenOf(s, u).shown.filter(id => !before.includes(id) && MSG[id].part !== u).forEach(id => flies.push([id, "screen:" + u]));
+    });
+  }
+  if (forward && flies.length && !reduced) {
+    const gap = flies.length > 6 ? 70 : 140;
+    flies.forEach(([id, target], i) => fly(id, target, i * gap));
+    setTimeout(() => { if (STEPS[step] === s) { renderKnows(s); renderScreens(s); } }, 900 + flies.length * gap);
+  } else {
+    renderKnows(s);
+    renderScreens(s);
+  }
+  $("back").disabled = step === 0;
+  $("next").disabled = step === STEPS.length - 1;
+  document.querySelectorAll(".dots button").forEach((b, i) => b.setAttribute("aria-current", i === step ? "step" : "false"));
+}
+
+function go(n, forward = n === step + 1) {
+  step = Math.max(0, Math.min(STEPS.length - 1, n));
+  render(forward);
+}
+function setPlaying(on) {
+  playing = on;
+  $("play").textContent = on ? "❚❚ Pause" : (step === STEPS.length - 1 ? "↺ Replay" : "▶ Play");
+  clearTimeout(timer);
+  if (on) tick();
+}
+function tick() {
+  timer = setTimeout(() => {
+    if (step >= STEPS.length - 1) return setPlaying(false);
+    go(step + 1, true);
+    if (step >= STEPS.length - 1) setPlaying(false); else tick();
+  }, 8000);
+}
+
+buildLanes();
+buildScreens();
+STEPS.forEach((s, i) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = i + 1; b.title = s.title;
+  b.addEventListener("click", () => { setPlaying(false); go(i); });
+  $("dots").appendChild(b);
+});
+$("back").addEventListener("click", () => { setPlaying(false); go(step - 1); });
+$("next").addEventListener("click", () => { setPlaying(false); go(step + 1, true); });
+$("play").addEventListener("click", () => {
+  if (playing) return setPlaying(false);
+  if (step === STEPS.length - 1) go(0);
+  setPlaying(true);
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") { setPlaying(false); go(step + 1, true); }
+  if (e.key === "ArrowLeft") { setPlaying(false); go(step - 1); }
+});
+render(false);
+</script>
+</body>
+</html>
